@@ -5,10 +5,10 @@ from PyQt5.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
     QComboBox, QPushButton, QCheckBox, QFrame, QTextEdit, QProgressBar,
     QInputDialog, QMessageBox, QDialog, QLineEdit, QRadioButton, QButtonGroup,
-    QStackedWidget, QGridLayout, QGraphicsDropShadowEffect
+    QStackedWidget, QGridLayout, QGraphicsDropShadowEffect, QScrollArea
 )
 from PyQt5.QtCore import Qt, pyqtSlot, QTimer, QPropertyAnimation, QPoint, QEasingCurve
-from PyQt5.QtGui import QFont, QPalette, QColor
+from PyQt5.QtGui import QFont, QPalette, QColor, QPixmap
 
 # Try to import serial for scanning ports
 try:
@@ -53,7 +53,7 @@ class CalibrationDialog(QDialog):
 
     def init_ui(self):
         self.setWindowTitle("Kalibrasyon ve Veri Toplama Merkezi")
-        self.setMinimumSize(540, 540)
+        self.setMinimumSize(960, 640)
         
         # Premium macOS Light Mode Dialog Styling
         self.setStyleSheet("""
@@ -163,9 +163,14 @@ class CalibrationDialog(QDialog):
             }
         """)
 
-        layout = QVBoxLayout(self)
+        main_layout = QHBoxLayout(self)
+        main_layout.setSpacing(20)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+
+        left_widget = QWidget()
+        layout = QVBoxLayout(left_widget)
         layout.setSpacing(14)
-        layout.setContentsMargins(28, 28, 28, 28)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         # Header Title
         layout.addWidget(QLabel("KALİBRE EDİLECEK HARFİ SEÇİN"))
@@ -249,6 +254,74 @@ class CalibrationDialog(QDialog):
         btn_layout.addWidget(self.btn_train)
         
         layout.addLayout(btn_layout)
+
+        # Right Panel: İşaret Dili Kılavuzu
+        right_panel = QFrame()
+        right_panel.setObjectName("right_panel")
+        right_panel.setStyleSheet("""
+            QFrame#right_panel {
+                background-color: #f5f5f7;
+                border: 1px solid #d2d2d7;
+                border-radius: 14px;
+            }
+        """)
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(14, 14, 14, 14)
+        right_layout.setSpacing(10)
+
+        lbl_guide_title = QLabel("TÜRKÇE İŞARET DİLİ KILAVUZU")
+        lbl_guide_title.setStyleSheet("font-size: 12px; font-weight: 800; color: #1d1d1f; letter-spacing: 0.5px;")
+        lbl_guide_title.setAlignment(Qt.AlignCenter)
+        right_layout.addWidget(lbl_guide_title)
+
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            /* Custom minimalist scrollbar inside guide */
+            QScrollBar:vertical {
+                border: none;
+                background: transparent;
+                width: 6px;
+                margin: 4px 0 4px 0;
+            }
+            QScrollBar::handle:vertical {
+                background: #d2d2d7;
+                min-height: 20px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #86868b;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
+
+        lbl_guide_img = QLabel()
+        lbl_guide_img.setAlignment(Qt.AlignCenter)
+
+        # Load the guide image from root directory
+        workspace_path = self.parent().ml_engine.workspace_path
+        img_path = os.path.join(workspace_path, "isaret_rehberi.jpg")
+        if os.path.exists(img_path):
+            pixmap = QPixmap(img_path)
+            # Scale pixmap to fit the width (approx 360px wide) while maintaining aspect ratio
+            scaled_pixmap = pixmap.scaledToWidth(360, Qt.SmoothTransformation)
+            lbl_guide_img.setPixmap(scaled_pixmap)
+        else:
+            lbl_guide_img.setText("Kılavuz görseli bulunamadı:\nisaret_rehberi.jpg")
+            lbl_guide_img.setStyleSheet("color: #ff3b30; font-weight: bold; font-size: 13px;")
+
+        scroll_area.setWidget(lbl_guide_img)
+        right_layout.addWidget(scroll_area)
+
+        # Assemble Left and Right inside main QHBoxLayout
+        main_layout.addWidget(left_widget, 5)
+        main_layout.addWidget(right_panel, 4)
 
     def select_letter(self, letter):
         self.selected_letter = letter
