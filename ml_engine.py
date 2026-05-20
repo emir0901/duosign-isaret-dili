@@ -110,7 +110,7 @@ class MLEngine:
                 from sklearn.preprocessing import LabelEncoder
                 le = LabelEncoder()
                 y_train_encoded = le.fit_transform(y_train)
-                model = XGBClassifier(use_label_encoder=False, eval_metric='mlogloss', random_state=42)
+                model = XGBClassifier(eval_metric='mlogloss', random_state=42)
                 model.fit(X_train, y_train_encoded)
                 # Save label encoder inside model metadata
                 model.label_encoder = le

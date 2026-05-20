@@ -38,6 +38,124 @@ def get_system_ports():
     return ports
 
 
+class SensorGraphWidget(QFrame):
+    """
+    📈 Anlık Sinyal Görselleştirici (Real-time Signal Graph Oscilloscope)
+    Eldivenden gelen sensör verilerini 60 FPS'te anti-aliasing ile akıcı
+    şekilde çizdiren, harici kütüphane gerektirmeyen premium QPainter widget'ı.
+    """
+    def __init__(self, parent=None, graph_title="Sinyal"):
+        super().__init__(parent)
+        self.graph_title = graph_title
+        self.history_size = 100
+        # 5 flex sensör verisi için geçmiş veri tutucu
+        self.data_history = [[] for _ in range(5)]
+        self.colors = [
+            QColor(0, 113, 227),    # SF Blue
+            QColor(52, 199, 89),    # SF Green
+            QColor(175, 82, 222),   # SF Purple
+            QColor(255, 149, 0),    # SF Orange
+            QColor(255, 59, 48)     # SF Red
+        ]
+        self.is_dark = False
+        self.setMinimumHeight(150)
+        self.setObjectName("sensor_graph")
+        self.update_styles()
+
+    def update_styles(self):
+        if self.is_dark:
+            self.setStyleSheet("""
+                QFrame#sensor_graph {
+                    background-color: #1c1c1e;
+                    border: 1px solid #2c2c2e;
+                    border-radius: 14px;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                QFrame#sensor_graph {
+                    background-color: #f5f5f7;
+                    border: 1px solid #e5e5ea;
+                    border-radius: 14px;
+                }
+            """)
+        self.update()
+
+    def update_data(self, sensor_values):
+        """Yeni sensör verisi geldiğinde çağrılır. İlk 5 flex sensör verisini ekler."""
+        if not sensor_values or len(sensor_values) < 5:
+            return
+            
+        for i in range(5):
+            val = sensor_values[i]
+            # Sensör değerini geçmişe ekle
+            self.data_history[i].append(val)
+            if len(self.data_history[i]) > self.history_size:
+                self.data_history[i].pop(0)
+        self.update()
+
+    def paintEvent(self, event):
+        from PyQt5.QtGui import QPainter, QPen, QColor, QPainterPath, QFont
+        
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        w = self.width()
+        h = self.height()
+        
+        # Arka plan ızgara çizgileri (Grid)
+        grid_color = QColor(44, 44, 46, 50) if self.is_dark else QColor(229, 229, 234, 180)
+        grid_pen = QPen(grid_color, 1, Qt.DashLine)
+        painter.setPen(grid_pen)
+        
+        # Yatay çizgiler
+        for y in range(25, h, 25):
+            painter.drawLine(10, y, w - 10, y)
+            
+        # Dikey çizgiler
+        for x in range(30, w, 50):
+            painter.drawLine(x, 10, x, h - 10)
+
+        # Sinyal eğrilerini çizdir
+        for i in range(5):
+            history = self.data_history[i]
+            if len(history) < 2:
+                continue
+                
+            path = QPainterPath()
+            
+            # Dinamik ölçekleme için min/max bul
+            min_val = min(history)
+            max_val = max(history)
+            val_range = max_val - min_val
+            if val_range == 0:
+                val_range = 1.0
+                
+            # Yumuşak eğri çizgisini oluştur
+            for step, val in enumerate(history):
+                # X koordinatını hesapla
+                x_coord = 10 + (step / (self.history_size - 1)) * (w - 20)
+                # Y koordinatını ters çevirerek (0,0 sol üstte olduğu için) hesapla
+                y_coord = (h - 15) - ((val - min_val) / val_range) * (h - 30)
+                
+                if step == 0:
+                    path.moveTo(x_coord, y_coord)
+                else:
+                    path.lineTo(x_coord, y_coord)
+                    
+            pen_color = self.colors[i]
+            alpha = 230 if self.is_dark else 180
+            pen = QPen(QColor(pen_color.red(), pen_color.green(), pen_color.blue(), alpha), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+            painter.setPen(pen)
+            painter.drawPath(path)
+
+        # Draw overlay title on graph
+        painter.setFont(QFont("Helvetica Neue", 10, QFont.Bold))
+        painter.setPen(QColor(142, 142, 147) if self.is_dark else QColor(142, 142, 147))
+        painter.drawText(15, 22, self.graph_title)
+
+
 class CalibrationDialog(QDialog):
     """
     🧲 Kalibrasyon ve Veri Toplama Merkezi (Apple Light Mode Tasarımı)
@@ -226,7 +344,7 @@ class CalibrationDialog(QDialog):
             padding: 12px; 
             border: 1px solid #e5e5ea; 
             border-radius: 12px; 
-            font-family: -apple-system, monospace; 
+            font-family: Helvetica Neue, monospace; 
             font-size: 11px; 
             color: #1d1d1f;
         """)
@@ -475,15 +593,15 @@ class ModelDrawer(QFrame):
 
         # Header Row: Title & Close Button
         header_layout = QHBoxLayout()
-        lbl_title = QLabel("YAPAY ZEKA MODELLERİ")
-        lbl_title.setStyleSheet("font-size: 14px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.5px;")
+        self.lbl_title = QLabel("YAPAY ZEKA MODELLERİ")
+        self.lbl_title.setStyleSheet("font-size: 14px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.5px;")
         
         btn_close = QPushButton("✕")
         btn_close.setObjectName("btn_close_drawer")
         btn_close.setCursor(Qt.PointingHandCursor)
         btn_close.clicked.connect(self.slide_out)
         
-        header_layout.addWidget(lbl_title)
+        header_layout.addWidget(self.lbl_title)
         header_layout.addStretch()
         header_layout.addWidget(btn_close)
         
@@ -552,6 +670,104 @@ class ModelDrawer(QFrame):
         self.animation.start()
         self.is_open = False
 
+    def apply_theme(self, is_dark):
+        if is_dark:
+            self.setStyleSheet("""
+                QFrame#model_drawer {
+                    background-color: #2c2c2e;
+                    border-right: 1px solid #3a3a3c;
+                }
+                QLabel {
+                    color: #8e8e93;
+                    font-size: 13px;
+                    font-weight: 700;
+                }
+                
+                /* Model Selection Buttons */
+                QPushButton.model-btn {
+                    background-color: #3a3a3c;
+                    color: #8e8e93;
+                    border: 1px solid #48484a;
+                    border-radius: 10px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    padding: 14px 10px;
+                    text-align: left;
+                }
+                QPushButton.model-btn:hover {
+                    background-color: #48484a;
+                    border-color: #0a84ff;
+                    color: #ffffff;
+                }
+                QPushButton.model-btn:checked {
+                    background-color: #0a84ff;
+                    color: #ffffff;
+                    border: none;
+                    font-weight: 700;
+                }
+                
+                /* Close Drawer Button */
+                QPushButton#btn_close_drawer {
+                    background-color: transparent;
+                    border: none;
+                    font-size: 18px;
+                    color: #8e8e93;
+                }
+                QPushButton#btn_close_drawer:hover {
+                    color: #ff453a;
+                }
+            """)
+            if hasattr(self, 'lbl_title'):
+                self.lbl_title.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;")
+        else:
+            self.setStyleSheet("""
+                QFrame#model_drawer {
+                    background-color: #ffffff;
+                    border-right: 1px solid #e5e5ea;
+                }
+                QLabel {
+                    color: #86868b;
+                    font-size: 13px;
+                    font-weight: 700;
+                }
+                
+                /* Model Selection Buttons */
+                QPushButton.model-btn {
+                    background-color: #f5f5f7;
+                    color: #86868b;
+                    border: 1px solid #d2d2d7;
+                    border-radius: 10px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    padding: 14px 10px;
+                    text-align: left;
+                }
+                QPushButton.model-btn:hover {
+                    background-color: #e8e8ed;
+                    border-color: #0071e3;
+                    color: #1d1d1f;
+                }
+                QPushButton.model-btn:checked {
+                    background-color: #0071e3;
+                    color: #ffffff;
+                    border: none;
+                    font-weight: 700;
+                }
+                
+                /* Close Drawer Button */
+                QPushButton#btn_close_drawer {
+                    background-color: transparent;
+                    border: none;
+                    font-size: 18px;
+                    color: #86868b;
+                }
+                QPushButton#btn_close_drawer:hover {
+                    color: #ff3b30;
+                }
+            """)
+            if hasattr(self, 'lbl_title'):
+                self.lbl_title.setStyleSheet("font-size: 14px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.5px;")
+
     def update_layout(self):
         """Update drawer height and position based on parent size changes"""
         h = self.parent_win.height()
@@ -569,6 +785,7 @@ class MainAppWindow(QMainWindow):
         self.serial_worker = serial_worker
         self.last_predictions = []
         self.voice_feedback = False
+        self.is_dark = False
         
         # Initialize default model
         self.active_model_key = "MLP"
@@ -601,7 +818,7 @@ class MainAppWindow(QMainWindow):
             }
             QWidget {
                 color: #1d1d1f;
-                font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                font-family: Helvetica Neue, Helvetica Neue, Arial, sans-serif;
             }
             
             /* Model Selection Buttons */
@@ -745,10 +962,10 @@ class MainAppWindow(QMainWindow):
         sidebar_layout.setSpacing(14)
 
         # Title
-        lbl_control_title = QLabel("DuoSign")
-        lbl_control_title.setStyleSheet("font-size: 22px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.8px;")
-        lbl_control_title.setAlignment(Qt.AlignCenter)
-        sidebar_layout.addWidget(lbl_control_title)
+        self.lbl_control_title = QLabel("DuoSign")
+        self.lbl_control_title.setStyleSheet("font-size: 22px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.8px;")
+        self.lbl_control_title.setAlignment(Qt.AlignCenter)
+        sidebar_layout.addWidget(self.lbl_control_title)
 
         # Signal Status Badge
         self.lbl_signal = QLabel("🔴 SİNYAL YOK")
@@ -772,9 +989,9 @@ class MainAppWindow(QMainWindow):
         self.combo_ports.currentTextChanged.connect(self.on_port_changed)
 
         # Model Selector group
-        lbl_model_title = QLabel("YAPAY ZEKA MODELİ")
-        lbl_model_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b; text-transform: uppercase; letter-spacing: 0.5px;")
-        sidebar_layout.addWidget(lbl_model_title)
+        self.lbl_model_title = QLabel("YAPAY ZEKA MODELİ")
+        self.lbl_model_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b; text-transform: uppercase; letter-spacing: 0.5px;")
+        sidebar_layout.addWidget(self.lbl_model_title)
 
         # Model selection center button (Apple Purple)
         self.btn_select_model = QPushButton("🧠 Model Seçim Merkezi")
@@ -829,6 +1046,12 @@ class MainAppWindow(QMainWindow):
         self.toggle_voice.stateChanged.connect(self.on_voice_toggle)
         sidebar_layout.addWidget(self.toggle_voice)
 
+        # Dark Mode Theme Toggle
+        self.toggle_dark = QCheckBox("Karanlık Tema (Dark Mode)")
+        self.toggle_dark.setChecked(False)
+        self.toggle_dark.stateChanged.connect(self.on_theme_toggled)
+        sidebar_layout.addWidget(self.toggle_dark)
+
         # Spacer to push action buttons to bottom left
         sidebar_layout.addStretch()
 
@@ -873,10 +1096,10 @@ class MainAppWindow(QMainWindow):
         mid_layout.setSpacing(15)
 
         # Title
-        lbl_mid_title = QLabel("ALGILANAN HARF")
-        lbl_mid_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #86868b; letter-spacing: 0.5px;")
-        lbl_mid_title.setAlignment(Qt.AlignCenter)
-        mid_layout.addWidget(lbl_mid_title)
+        self.lbl_mid_title = QLabel("ALGILANAN HARF")
+        self.lbl_mid_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #86868b; letter-spacing: 0.5px;")
+        self.lbl_mid_title.setAlignment(Qt.AlignCenter)
+        mid_layout.addWidget(self.lbl_mid_title)
 
         mid_layout.addStretch()
 
@@ -916,6 +1139,24 @@ class MainAppWindow(QMainWindow):
         """)
         mid_layout.addWidget(self.progress_confidence)
 
+        # Anlık Sinyal Grafik Başlığı
+        self.lbl_graph_title = QLabel("ANLIK SİNYAL GÖRSELLEŞTİRİCİ")
+        self.lbl_graph_title.setObjectName("lbl_graph_title")
+        self.lbl_graph_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b; letter-spacing: 0.5px; margin-top: 10px;")
+        self.lbl_graph_title.setAlignment(Qt.AlignCenter)
+        mid_layout.addWidget(self.lbl_graph_title)
+
+        # Sensor Graph Widgets (Split for Left and Right Hands)
+        graph_layout = QHBoxLayout()
+        graph_layout.setSpacing(12)
+        
+        self.left_sensor_graph = SensorGraphWidget(self, graph_title="SOL EL (Left Hand)")
+        self.right_sensor_graph = SensorGraphWidget(self, graph_title="SAĞ EL (Right Hand)")
+        
+        graph_layout.addWidget(self.left_sensor_graph)
+        graph_layout.addWidget(self.right_sensor_graph)
+        mid_layout.addLayout(graph_layout)
+
         main_layout.addWidget(mid_card)
 
         # -------------------------------------------------------------
@@ -928,10 +1169,10 @@ class MainAppWindow(QMainWindow):
         right_layout.setSpacing(12)
 
         # Ham Kelime Title
-        lbl_right_title = QLabel("HAM KELİME")
-        lbl_right_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b; letter-spacing: 0.5px;")
-        lbl_right_title.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(lbl_right_title)
+        self.lbl_right_title = QLabel("HAM KELİME")
+        self.lbl_right_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b; letter-spacing: 0.5px;")
+        self.lbl_right_title.setAlignment(Qt.AlignCenter)
+        right_layout.addWidget(self.lbl_right_title)
 
         # Sentence/sequence field (Apple Blue text inside custom card)
         self.lbl_sentence = QLabel("...")
@@ -950,10 +1191,10 @@ class MainAppWindow(QMainWindow):
         right_layout.addWidget(self.lbl_sentence)
 
         # Oto Düzeltme Title
-        lbl_corrected_title = QLabel("OTOMATİK DÜZELTME")
-        lbl_corrected_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #34c759; letter-spacing: 0.5px;")
-        lbl_corrected_title.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(lbl_corrected_title)
+        self.lbl_corrected_title = QLabel("OTOMATİK DÜZELTME")
+        self.lbl_corrected_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #34c759; letter-spacing: 0.5px;")
+        self.lbl_corrected_title.setAlignment(Qt.AlignCenter)
+        right_layout.addWidget(self.lbl_corrected_title)
 
         # Corrected field (Apple Green text inside glowing card)
         self.lbl_corrected = QLabel("...")
@@ -972,10 +1213,10 @@ class MainAppWindow(QMainWindow):
         right_layout.addWidget(self.lbl_corrected)
 
         # Match label (Apple Green similarity)
-        lbl_match_title = QLabel("Kelimelerle Eşleşme")
-        lbl_match_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #34c759;")
-        lbl_match_title.setAlignment(Qt.AlignCenter)
-        right_layout.addWidget(lbl_match_title)
+        self.lbl_match_title = QLabel("Kelimelerle Eşleşme")
+        self.lbl_match_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #34c759;")
+        self.lbl_match_title.setAlignment(Qt.AlignCenter)
+        right_layout.addWidget(self.lbl_match_title)
 
         # Small Apple System Green matching progress bar
         self.progress_match = QProgressBar()
@@ -998,9 +1239,9 @@ class MainAppWindow(QMainWindow):
         right_layout.addSpacing(6)
 
         # Previous predictions box
-        lbl_prev_title = QLabel("ÖNCEKİ TAHMİNLER")
-        lbl_prev_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b;")
-        right_layout.addWidget(lbl_prev_title)
+        self.lbl_prev_title = QLabel("ÖNCEKİ TAHMİNLER")
+        self.lbl_prev_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b;")
+        right_layout.addWidget(self.lbl_prev_title)
 
         self.txt_history = QTextEdit()
         self.txt_history.setReadOnly(True)
@@ -1197,6 +1438,12 @@ class MainAppWindow(QMainWindow):
 
     @pyqtSlot(list)
     def process_sensor_data(self, sensor_values):
+        # Feed the sensor stream to the real-time visualizer graphs (Left Hand: 0-4, Right Hand: 5-9)
+        if hasattr(self, 'left_sensor_graph'):
+            self.left_sensor_graph.update_data(sensor_values[0:5])
+        if hasattr(self, 'right_sensor_graph'):
+            self.right_sensor_graph.update_data(sensor_values[5:10])
+
         if self.calibration_dialog and self.calibration_dialog.isVisible():
             self.calibration_dialog.update_sensor_preview(sensor_values)
             return
@@ -1207,17 +1454,30 @@ class MainAppWindow(QMainWindow):
 
         if label and confidence > 0.65:
             self.lbl_letter_display.setText(label)
-            self.lbl_letter_display.setStyleSheet("""
-                QLabel {
-                    font-size: 110px;
-                    font-weight: 800;
-                    color: #0071e3;
-                    background-color: #ffffff;
-                    border: 2px solid #0071e3;
-                    border-radius: 20px;
-                    padding: 30px;
-                }
-            """)
+            if self.is_dark:
+                self.lbl_letter_display.setStyleSheet("""
+                    QLabel {
+                        font-size: 110px;
+                        font-weight: 800;
+                        color: #0a84ff;
+                        background-color: #1c1c1e;
+                        border: 2px solid #0a84ff;
+                        border-radius: 20px;
+                        padding: 30px;
+                    }
+                """)
+            else:
+                self.lbl_letter_display.setStyleSheet("""
+                    QLabel {
+                        font-size: 110px;
+                        font-weight: 800;
+                        color: #0071e3;
+                        background-color: #ffffff;
+                        border: 2px solid #0071e3;
+                        border-radius: 20px;
+                        padding: 30px;
+                    }
+                """)
             self.progress_confidence.setValue(int(confidence * 100))
 
             if not self.last_predictions or self.last_predictions[-1] != label:
@@ -1281,17 +1541,30 @@ class MainAppWindow(QMainWindow):
                     self.speak_label(label)
         else:
             self.progress_confidence.setValue(0)
-            self.lbl_letter_display.setStyleSheet("""
-                QLabel {
-                    font-size: 110px;
-                    font-weight: 800;
-                    color: #86868b;
-                    background-color: #f5f5f7;
-                    border: 2px solid #e5e5ea;
-                    border-radius: 20px;
-                    padding: 30px;
-                }
-            """)
+            if self.is_dark:
+                self.lbl_letter_display.setStyleSheet("""
+                    QLabel {
+                        font-size: 110px;
+                        font-weight: 800;
+                        color: #8e8e93;
+                        background-color: #1c1c1e;
+                        border: 2px solid #3a3a3c;
+                        border-radius: 20px;
+                        padding: 30px;
+                    }
+                """)
+            else:
+                self.lbl_letter_display.setStyleSheet("""
+                    QLabel {
+                        font-size: 110px;
+                        font-weight: 800;
+                        color: #86868b;
+                        background-color: #f5f5f7;
+                        border: 2px solid #e5e5ea;
+                        border-radius: 20px;
+                        padding: 30px;
+                    }
+                """)
 
     def on_model_selected(self, model_key, display_name):
         self.active_model_key = model_key
@@ -1311,21 +1584,628 @@ class MainAppWindow(QMainWindow):
     def on_voice_toggle(self, state):
         self.voice_feedback = (state == Qt.Checked)
 
+    def on_theme_toggled(self, state):
+        self.apply_theme(state == Qt.Checked)
+
+    def apply_theme(self, is_dark):
+        self.is_dark = is_dark
+        
+        # Update sensor graph widgets theme
+        if hasattr(self, 'left_sensor_graph'):
+            self.left_sensor_graph.is_dark = is_dark
+            self.left_sensor_graph.update_styles()
+        if hasattr(self, 'right_sensor_graph'):
+            self.right_sensor_graph.is_dark = is_dark
+            self.right_sensor_graph.update_styles()
+            
+        # Update model drawer theme
+        if hasattr(self, 'model_drawer'):
+            self.model_drawer.apply_theme(is_dark)
+
+        # Update main app stylesheets
+        if is_dark:
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #1c1c1e;
+                }
+                QWidget {
+                    color: #f5f5f7;
+                    font-family: Helvetica Neue, Helvetica Neue, Arial, sans-serif;
+                }
+                
+                /* Model Selection Buttons */
+                QPushButton.model-btn {
+                    background-color: #2c2c2e;
+                    color: #8e8e93;
+                    border: 1px solid #3a3a3c;
+                    border-radius: 8px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 8px 4px;
+                }
+                QPushButton.model-btn:hover {
+                    background-color: #3a3a3c;
+                    border-color: #0a84ff;
+                    color: #ffffff;
+                }
+                QPushButton.model-btn:checked {
+                    background-color: #0a84ff;
+                    color: #ffffff;
+                    border: none;
+                    font-weight: 700;
+                }
+                
+                /* Sidebar and Container Cards */
+                QFrame#sidebar {
+                    background-color: #2c2c2e;
+                    border: 1px solid #3a3a3c;
+                    border-radius: 18px;
+                }
+                QFrame#mid_card, QFrame#right_card {
+                    background-color: #2c2c2e;
+                    border: 1px solid #3a3a3c;
+                    border-radius: 18px;
+                }
+                
+                /* Modern Input Controls */
+                QComboBox {
+                    background-color: #3a3a3c;
+                    border: 1px solid #48484a;
+                    border-radius: 10px;
+                    padding: 8px 12px;
+                    color: #ffffff;
+                    font-size: 13px;
+                    font-weight: 500;
+                }
+                QComboBox:hover {
+                    border-color: #8e8e93;
+                    background-color: #48484a;
+                }
+                QComboBox:focus {
+                    border-color: #0a84ff;
+                    background-color: #2c2c2e;
+                }
+                QComboBox::drop-down {
+                    border: none;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: #2c2c2e;
+                    border: 1px solid #3a3a3c;
+                    border-radius: 8px;
+                    selection-background-color: #0a84ff;
+                    selection-color: #ffffff;
+                    color: #ffffff;
+                    padding: 4px;
+                }
+                
+                /* Checkboxes */
+                QCheckBox {
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #8e8e93;
+                    spacing: 10px;
+                }
+                QCheckBox::indicator {
+                    width: 18px;
+                    height: 18px;
+                    border: 1px solid #48484a;
+                    border-radius: 6px;
+                    background-color: #3a3a3c;
+                }
+                QCheckBox::indicator:checked {
+                    background-color: #30d158;
+                    border-color: #30d158;
+                }
+                QCheckBox::indicator:hover {
+                    border-color: #30d158;
+                }
+                
+                /* Elegant scrollbars */
+                QScrollBar:vertical {
+                    border: none;
+                    background: transparent;
+                    width: 6px;
+                    margin: 4px 0 4px 0;
+                }
+                QScrollBar::handle:vertical {
+                    background: #48484a;
+                    min-height: 20px;
+                    border-radius: 3px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background: #8e8e93;
+                }
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                    height: 0px;
+                }
+                QScrollBar:horizontal {
+                    border: none;
+                    background: transparent;
+                    height: 6px;
+                    margin: 0 4px 0 4px;
+                }
+                QScrollBar::handle:horizontal {
+                    background: #48484a;
+                    min-width: 20px;
+                    border-radius: 3px;
+                }
+                QScrollBar::handle:horizontal:hover {
+                    background: #8e8e93;
+                }
+                QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                    width: 0px;
+                }
+            """)
+            
+            # Dynamic inline widgets updates
+            if hasattr(self, 'lbl_control_title'):
+                self.lbl_control_title.setStyleSheet("font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.8px;")
+            if hasattr(self, 'lbl_model_title'):
+                self.lbl_model_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #8e8e93; text-transform: uppercase; letter-spacing: 0.5px;")
+            
+            # Select Model & Calibrate buttons
+            btn_style = """
+                QPushButton {
+                    background-color: #0a84ff;
+                    color: #ffffff;
+                    font-size: 13px;
+                    font-weight: 700;
+                    border-radius: 10px;
+                    padding: 12px;
+                    border: none;
+                }
+                QPushButton:hover {
+                    background-color: #3094ff;
+                }
+                QPushButton:pressed {
+                    background-color: #0066cc;
+                }
+            """
+            if hasattr(self, 'btn_select_model'):
+                self.btn_select_model.setStyleSheet(btn_style)
+            if hasattr(self, 'btn_calibrate'):
+                self.btn_calibrate.setStyleSheet(btn_style)
+                
+            # Clear display button
+            if hasattr(self, 'btn_clear'):
+                self.btn_clear.setStyleSheet("""
+                    QPushButton {
+                        background-color: #3a3a3c;
+                        color: #ffffff;
+                        font-size: 12px;
+                        font-weight: 700;
+                        border-radius: 10px;
+                        padding: 10px;
+                        border: 1px solid #48484a;
+                    }
+                    QPushButton:hover {
+                        background-color: #48484a;
+                        border-color: #8e8e93;
+                    }
+                """)
+                
+            # Middle title
+            if hasattr(self, 'lbl_mid_title'):
+                self.lbl_mid_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #8e8e93; letter-spacing: 0.5px;")
+                
+            # Graph title
+            if hasattr(self, 'lbl_graph_title'):
+                self.lbl_graph_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #8e8e93; letter-spacing: 0.5px; margin-top: 10px;")
+
+            # Letter display
+            if hasattr(self, 'lbl_letter_display'):
+                conf = self.progress_confidence.value()
+                if conf > 65:
+                    self.lbl_letter_display.setStyleSheet("""
+                        QLabel {
+                            font-size: 110px;
+                            font-weight: 800;
+                            color: #0a84ff;
+                            background-color: #1c1c1e;
+                            border: 2px solid #0a84ff;
+                            border-radius: 20px;
+                            padding: 30px;
+                        }
+                    """)
+                else:
+                    self.lbl_letter_display.setStyleSheet("""
+                        QLabel {
+                            font-size: 110px;
+                            font-weight: 800;
+                            color: #8e8e93;
+                            background-color: #1c1c1e;
+                            border: 2px solid #3a3a3c;
+                            border-radius: 20px;
+                            padding: 30px;
+                        }
+                    """)
+                    
+            # Confidence bar
+            if hasattr(self, 'progress_confidence'):
+                self.progress_confidence.setStyleSheet("""
+                    QProgressBar {
+                        background-color: #1c1c1e;
+                        border-radius: 3px;
+                        border: none;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #0a84ff;
+                        border-radius: 3px;
+                    }
+                """)
+                
+            # Ham Kelime Title & display
+            if hasattr(self, 'lbl_right_title'):
+                self.lbl_right_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #8e8e93; letter-spacing: 0.5px;")
+            if hasattr(self, 'lbl_sentence'):
+                self.lbl_sentence.setStyleSheet("""
+                    QLabel {
+                        font-size: 24px;
+                        font-weight: 700;
+                        color: #8e8e93;
+                        background-color: #1c1c1e;
+                        border: 1px solid #3a3a3c;
+                        border-radius: 12px;
+                        padding: 10px;
+                    }
+                """)
+                
+            # Oto Düzeltme Title & display
+            if hasattr(self, 'lbl_corrected_title'):
+                self.lbl_corrected_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #30d158; letter-spacing: 0.5px;")
+            if hasattr(self, 'lbl_corrected'):
+                self.lbl_corrected.setStyleSheet("""
+                    QLabel {
+                        font-size: 32px;
+                        font-weight: 800;
+                        color: #ffffff;
+                        background-color: #30d158;
+                        border: none;
+                        border-radius: 12px;
+                        padding: 14px;
+                    }
+                """)
+            if hasattr(self, 'lbl_match_title'):
+                self.lbl_match_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #30d158;")
+            if hasattr(self, 'progress_match'):
+                self.progress_match.setStyleSheet("""
+                    QProgressBar {
+                        background-color: #1c1c1e;
+                        border-radius: 3px;
+                        border: none;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #30d158;
+                        border-radius: 3px;
+                    }
+                """)
+                
+            # Previous predictions box
+            if hasattr(self, 'lbl_prev_title'):
+                self.lbl_prev_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #8e8e93;")
+            if hasattr(self, 'txt_history'):
+                self.txt_history.setStyleSheet("""
+                    QTextEdit {
+                        background-color: #1c1c1e;
+                        border: 1px solid #3a3a3c;
+                        border-radius: 12px;
+                        padding: 12px;
+                        color: #f5f5f7;
+                        font-size: 13px;
+                    }
+                """)
+        else:
+            # Light Mode
+            self.setStyleSheet("""
+                QMainWindow {
+                    background-color: #f5f5f7;
+                }
+                QWidget {
+                    color: #1d1d1f;
+                    font-family: Helvetica Neue, Helvetica Neue, Arial, sans-serif;
+                }
+                
+                /* Model Selection Buttons */
+                QPushButton.model-btn {
+                    background-color: #f5f5f7;
+                    color: #86868b;
+                    border: 1px solid #d2d2d7;
+                    border-radius: 8px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 8px 4px;
+                }
+                QPushButton.model-btn:hover {
+                    background-color: #e8e8ed;
+                    border-color: #0071e3;
+                    color: #1d1d1f;
+                }
+                QPushButton.model-btn:checked {
+                    background-color: #0071e3;
+                    color: #ffffff;
+                    border: none;
+                    font-weight: 700;
+                }
+                
+                /* Sidebar and Container Cards */
+                QFrame#sidebar {
+                    background-color: #ffffff;
+                    border: 1px solid #e5e5ea;
+                    border-radius: 18px;
+                }
+                QFrame#mid_card, QFrame#right_card {
+                    background-color: #ffffff;
+                    border: 1px solid #e5e5ea;
+                    border-radius: 18px;
+                }
+                
+                /* Modern Input Controls */
+                QComboBox {
+                    background-color: #f5f5f7;
+                    border: 1px solid #d2d2d7;
+                    border-radius: 10px;
+                    padding: 8px 12px;
+                    color: #1d1d1f;
+                    font-size: 13px;
+                    font-weight: 500;
+                }
+                QComboBox:hover {
+                    border-color: #86868b;
+                    background-color: #e8e8ed;
+                }
+                QComboBox:focus {
+                    border-color: #0071e3;
+                    background-color: #ffffff;
+                }
+                QComboBox::drop-down {
+                    border: none;
+                }
+                QComboBox QAbstractItemView {
+                    background-color: #ffffff;
+                    border: 1px solid #d2d2d7;
+                    border-radius: 8px;
+                    selection-background-color: #0071e3;
+                    selection-color: #ffffff;
+                    color: #1d1d1f;
+                    padding: 4px;
+                }
+                
+                /* Checkboxes */
+                QCheckBox {
+                    font-size: 13px;
+                    font-weight: 500;
+                    color: #86868b;
+                    spacing: 10px;
+                }
+                QCheckBox::indicator {
+                    width: 18px;
+                    height: 18px;
+                    border: 1px solid #d2d2d7;
+                    border-radius: 6px;
+                    background-color: #f5f5f7;
+                }
+                QCheckBox::indicator:checked {
+                    background-color: #34c759;
+                    border-color: #34c759;
+                }
+                QCheckBox::indicator:hover {
+                    border-color: #34c759;
+                }
+                
+                /* Elegant scrollbars */
+                QScrollBar:vertical {
+                    border: none;
+                    background: transparent;
+                    width: 6px;
+                    margin: 4px 0 4px 0;
+                }
+                QScrollBar::handle:vertical {
+                    background: #d2d2d7;
+                    min-height: 20px;
+                    border-radius: 3px;
+                }
+                QScrollBar::handle:vertical:hover {
+                    background: #86868b;
+                }
+                QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                    height: 0px;
+                }
+                QScrollBar:horizontal {
+                    border: none;
+                    background: transparent;
+                    height: 6px;
+                    margin: 0 4px 0 4px;
+                }
+                QScrollBar::handle:horizontal {
+                    background: #d2d2d7;
+                    min-width: 20px;
+                    border-radius: 3px;
+                }
+                QScrollBar::handle:horizontal:hover {
+                    background: #86868b;
+                }
+                QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                    width: 0px;
+                }
+            """)
+            
+            # Dynamic inline widgets updates
+            if hasattr(self, 'lbl_control_title'):
+                self.lbl_control_title.setStyleSheet("font-size: 22px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.8px;")
+            if hasattr(self, 'lbl_model_title'):
+                self.lbl_model_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b; text-transform: uppercase; letter-spacing: 0.5px;")
+            
+            # Select Model & Calibrate buttons
+            btn_style = """
+                QPushButton {
+                    background-color: #0071e3;
+                    color: #ffffff;
+                    font-size: 13px;
+                    font-weight: 700;
+                    border-radius: 10px;
+                    padding: 12px;
+                    border: none;
+                }
+                QPushButton:hover {
+                    background-color: #147efb;
+                }
+                QPushButton:pressed {
+                    background-color: #005bb5;
+                }
+            """
+            if hasattr(self, 'btn_select_model'):
+                self.btn_select_model.setStyleSheet(btn_style)
+            if hasattr(self, 'btn_calibrate'):
+                self.btn_calibrate.setStyleSheet(btn_style)
+                
+            # Clear display button
+            if hasattr(self, 'btn_clear'):
+                self.btn_clear.setStyleSheet("""
+                    QPushButton {
+                        background-color: #f5f5f7;
+                        color: #1d1d1f;
+                        font-size: 12px;
+                        font-weight: 700;
+                        border-radius: 10px;
+                        padding: 10px;
+                        border: 1px solid #d2d2d7;
+                    }
+                    QPushButton:hover {
+                        background-color: #e8e8ed;
+                        border-color: #86868b;
+                    }
+                """)
+                
+            # Middle title
+            if hasattr(self, 'lbl_mid_title'):
+                self.lbl_mid_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #86868b; letter-spacing: 0.5px;")
+                
+            # Graph title
+            if hasattr(self, 'lbl_graph_title'):
+                self.lbl_graph_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b; letter-spacing: 0.5px; margin-top: 10px;")
+
+            # Letter display
+            if hasattr(self, 'lbl_letter_display'):
+                conf = self.progress_confidence.value()
+                if conf > 65:
+                    self.lbl_letter_display.setStyleSheet("""
+                        QLabel {
+                            font-size: 110px;
+                            font-weight: 800;
+                            color: #0071e3;
+                            background-color: #ffffff;
+                            border: 2px solid #0071e3;
+                            border-radius: 20px;
+                            padding: 30px;
+                        }
+                    """)
+                else:
+                    self.lbl_letter_display.setStyleSheet("""
+                        QLabel {
+                            font-size: 110px;
+                            font-weight: 800;
+                            color: #86868b;
+                            background-color: #f5f5f7;
+                            border: 2px solid #e5e5ea;
+                            border-radius: 20px;
+                            padding: 30px;
+                        }
+                    """)
+                    
+            # Confidence bar
+            if hasattr(self, 'progress_confidence'):
+                self.progress_confidence.setStyleSheet("""
+                    QProgressBar {
+                        background-color: #f5f5f7;
+                        border-radius: 3px;
+                        border: none;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #0071e3;
+                        border-radius: 3px;
+                    }
+                """)
+                
+            # Ham Kelime Title & display
+            if hasattr(self, 'lbl_right_title'):
+                self.lbl_right_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b; letter-spacing: 0.5px;")
+            if hasattr(self, 'lbl_sentence'):
+                self.lbl_sentence.setStyleSheet("""
+                    QLabel {
+                        font-size: 24px;
+                        font-weight: 700;
+                        color: #86868b;
+                        background-color: #f5f5f7;
+                        border: 1px solid #e5e5ea;
+                        border-radius: 12px;
+                        padding: 10px;
+                    }
+                """)
+                
+            # Oto Düzeltme Title & display
+            if hasattr(self, 'lbl_corrected_title'):
+                self.lbl_corrected_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #34c759; letter-spacing: 0.5px;")
+            if hasattr(self, 'lbl_corrected'):
+                self.lbl_corrected.setStyleSheet("""
+                    QLabel {
+                        font-size: 32px;
+                        font-weight: 800;
+                        color: #ffffff;
+                        background-color: #34c759;
+                        border: none;
+                        border-radius: 12px;
+                        padding: 14px;
+                    }
+                """)
+            if hasattr(self, 'lbl_match_title'):
+                self.lbl_match_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #34c759;")
+            if hasattr(self, 'progress_match'):
+                self.progress_match.setStyleSheet("""
+                    QProgressBar {
+                        background-color: #f5f5f7;
+                        border-radius: 3px;
+                        border: none;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #34c759;
+                        border-radius: 3px;
+                    }
+                """)
+                
+            # Previous predictions box
+            if hasattr(self, 'lbl_prev_title'):
+                self.lbl_prev_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #86868b;")
+            if hasattr(self, 'txt_history'):
+                self.txt_history.setStyleSheet("""
+                    QTextEdit {
+                        background-color: #f5f5f7;
+                        border: 1px solid #e5e5ea;
+                        border-radius: 12px;
+                        padding: 12px;
+                        color: #1d1d1f;
+                        font-size: 13px;
+                    }
+                """)
+
     def speak_label(self, label):
-        try:
-            import pyttsx3
-            engine = pyttsx3.init()
-            voices = engine.getProperty('voices')
-            for v in voices:
-                if 'tr' in v.id.lower() or 'turkish' in v.name.lower():
-                    engine.setProperty('voice', v.id)
-                    break
-            engine.say(label)
-            engine.runAndWait()
-        except ImportError:
-            pass
-        except Exception as e:
-            print(f"Ses okuma hatası: {e}")
+        import threading
+        def run_speech():
+            try:
+                import pyttsx3
+                engine = pyttsx3.init()
+                voices = engine.getProperty('voices')
+                for v in voices:
+                    if 'tr' in v.id.lower() or 'turkish' in v.name.lower():
+                        engine.setProperty('voice', v.id)
+                        break
+                engine.say(label)
+                engine.runAndWait()
+            except ImportError:
+                pass
+            except Exception as e:
+                print(f"Ses okuma hatası: {e}")
+        
+        threading.Thread(target=run_speech, daemon=True).start()
 
     def open_calibration(self):
         self.calibration_dialog = CalibrationDialog(self)
@@ -1384,3 +2264,27 @@ class MainAppWindow(QMainWindow):
         self.progress_confidence.setValue(0)
         self.progress_match.setValue(0)
         self.txt_history.setText("Hazır...")
+        if self.is_dark:
+            self.lbl_letter_display.setStyleSheet("""
+                QLabel {
+                    font-size: 110px;
+                    font-weight: 800;
+                    color: #8e8e93;
+                    background-color: #1c1c1e;
+                    border: 2px solid #3a3a3c;
+                    border-radius: 20px;
+                    padding: 30px;
+                }
+            """)
+        else:
+            self.lbl_letter_display.setStyleSheet("""
+                QLabel {
+                    font-size: 110px;
+                    font-weight: 800;
+                    color: #86868b;
+                    background-color: #f5f5f7;
+                    border: 2px solid #e5e5ea;
+                    border-radius: 20px;
+                    padding: 30px;
+                }
+            """)
