@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+# ==============================================================================
+# 🧠 DuoSign - Akıllı İşaret Dili Tanıma Arayüzü & Yapay Zeka Altyapısı
+# ✍️ Tasarım & Geliştirici: Recep Emirhan Öztürk (emir0901)
+# ✉️ İletişim: emrhanozt06@gmail.com
+# ==============================================================================
+
 import sys
 import os
 import difflib
@@ -373,6 +380,16 @@ class CalibrationDialog(QDialog):
         
         layout.addLayout(btn_layout)
 
+        # Visual Signature
+        is_dark = False
+        if self.parent() and hasattr(self.parent(), 'is_dark'):
+            is_dark = self.parent().is_dark
+        lbl_dialog_sig = QLabel("✍️ Geliştirici: Recep Emirhan Öztürk")
+        sig_color = "#8e8e93" if is_dark else "#86868b"
+        lbl_dialog_sig.setStyleSheet(f"font-size: 11px; color: {sig_color}; font-weight: 600; margin-top: 4px; font-family: 'Helvetica Neue', Arial;")
+        lbl_dialog_sig.setAlignment(Qt.AlignCenter)
+        layout.addWidget(lbl_dialog_sig)
+
         # Right Panel: İşaret Dili Kılavuzu
         right_panel = QFrame()
         right_panel.setObjectName("right_panel")
@@ -641,6 +658,13 @@ class ModelDrawer(QFrame):
 
         layout.addStretch()
 
+        # Visual Signature
+        self.lbl_drawer_sig = QLabel("✍️ Geliştirici: Recep Emirhan Öztürk")
+        self.lbl_drawer_sig.setObjectName("lbl_drawer_sig")
+        self.lbl_drawer_sig.setStyleSheet("font-size: 11px; color: #86868b; font-weight: 600; font-family: 'Helvetica Neue', Arial;")
+        self.lbl_drawer_sig.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.lbl_drawer_sig)
+
         # Set initial size and position
         self.resize(self.drawer_width, self.parent_win.height())
         self.move(-self.drawer_width, 0)
@@ -719,6 +743,8 @@ class ModelDrawer(QFrame):
             """)
             if hasattr(self, 'lbl_title'):
                 self.lbl_title.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;")
+            if hasattr(self, 'lbl_drawer_sig'):
+                self.lbl_drawer_sig.setStyleSheet("font-size: 11px; color: #8e8e93; font-weight: 600; font-family: 'Helvetica Neue', Arial;")
         else:
             self.setStyleSheet("""
                 QFrame#model_drawer {
@@ -767,6 +793,8 @@ class ModelDrawer(QFrame):
             """)
             if hasattr(self, 'lbl_title'):
                 self.lbl_title.setStyleSheet("font-size: 14px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.5px;")
+            if hasattr(self, 'lbl_drawer_sig'):
+                self.lbl_drawer_sig.setStyleSheet("font-size: 11px; color: #86868b; font-weight: 600; font-family: 'Helvetica Neue', Arial;")
 
     def update_layout(self):
         """Update drawer height and position based on parent size changes"""
@@ -1083,6 +1111,13 @@ class MainAppWindow(QMainWindow):
         self.lbl_active_status.setStyleSheet("font-size: 11px; color: #34c759; font-weight: 600;")
         self.lbl_active_status.setAlignment(Qt.AlignCenter)
         sidebar_layout.addWidget(self.lbl_active_status)
+
+        # Developer Signature
+        self.lbl_signature = QLabel("✍️ Geliştirici: Recep Emirhan Öztürk")
+        self.lbl_signature.setObjectName("lbl_sidebar_sig")
+        self.lbl_signature.setStyleSheet("font-size: 11px; color: #86868b; font-weight: 600; margin-top: 4px;")
+        self.lbl_signature.setAlignment(Qt.AlignCenter)
+        sidebar_layout.addWidget(self.lbl_signature)
 
         main_layout.addWidget(sidebar)
 
@@ -1738,6 +1773,8 @@ class MainAppWindow(QMainWindow):
             """)
             
             # Dynamic inline widgets updates
+            if hasattr(self, 'lbl_signature'):
+                self.lbl_signature.setStyleSheet("font-size: 11px; color: #8e8e93; font-weight: 600; margin-top: 4px;")
             if hasattr(self, 'lbl_control_title'):
                 self.lbl_control_title.setStyleSheet("font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: -0.8px;")
             if hasattr(self, 'lbl_model_title'):
@@ -2030,6 +2067,8 @@ class MainAppWindow(QMainWindow):
             """)
             
             # Dynamic inline widgets updates
+            if hasattr(self, 'lbl_signature'):
+                self.lbl_signature.setStyleSheet("font-size: 11px; color: #86868b; font-weight: 600; margin-top: 4px;")
             if hasattr(self, 'lbl_control_title'):
                 self.lbl_control_title.setStyleSheet("font-size: 22px; font-weight: 800; color: #1d1d1f; letter-spacing: -0.8px;")
             if hasattr(self, 'lbl_model_title'):

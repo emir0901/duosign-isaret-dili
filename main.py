@@ -1,3 +1,10 @@
+# -*- coding: utf-8 -*-
+# ==============================================================================
+# 🧠 DuoSign - Akıllı İşaret Dili Tanıma Arayüzü & Yapay Zeka Altyapısı
+# ✍️ Tasarım & Geliştirici: Recep Emirhan Öztürk (emir0901)
+# ✉️ İletişim: emrhanozt06@gmail.com
+# ==============================================================================
+
 import sys
 from PyQt5.QtWidgets import QApplication
 from ml_engine import MLEngine

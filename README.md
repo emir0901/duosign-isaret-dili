@@ -83,4 +83,9 @@ Otomatik düzeltme motorunun kelimeleri doğru tahmin edebilmesi için sözlüğ
 
 ---
 
-*Geliştirici: emir0901 & DuoSign AI Team*
+## 🔐 Geliştirici & Mülkiyet Bilgileri
+
+* **Geliştirici & Tasarımcı:** Recep Emirhan Öztürk ([@emir0901](https://github.com/emir0901))
+* **İletişim:** [emrhanozt06@gmail.com](mailto:emrhanozt06@gmail.com)
+* **Durum:** Bu proje bizzat **Recep Emirhan Öztürk** tarafından tasarlanmış, kodlanmış ve geliştirilmiştir. Tüm hakları saklıdır.
+
